@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Vietlott 6/45",
+    "slug": "vietlott-645",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#111a24"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.vietlott.vietlott645"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#111a24",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "org.vietlott.vietlott645",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5685260e-29f1-4da8-b355-bdbb19e77acd"
+      }
+    },
+    "owner": "aznh82"
+  }
+}
