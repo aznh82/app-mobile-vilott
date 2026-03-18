@@ -20,7 +20,7 @@ import {
 import { fetchNew, fetchAllFrom, fetchJackpotInfo } from '../services/scraper';
 import { calculateStats, generateSuggestions, NumberStats, SuggestedSet } from '../utils/statistics';
 import { usePremium } from '../context/PremiumContext';
-import { preloadInterstitial, showInterstitialAd } from '../services/interstitialAd';
+import { preloadInterstitial, showInterstitialAd, cleanupInterstitial } from '../services/interstitialAd';
 import Header from '../components/Header';
 import LatestResult from '../components/LatestResult';
 import PeriodFilter from '../components/PeriodFilter';
@@ -74,10 +74,8 @@ export default function HomeScreen() {
     (async () => {
       // Initialize Google Mobile Ads
       await MobileAds().initialize();
-      // Preload interstitial for free users
-      if (!isPremium) {
-        preloadInterstitial();
-      }
+      // Preload interstitial (premium check is in incrementFetchCount)
+      preloadInterstitial();
 
       await initDB();
       await cleanupOldData();
@@ -87,6 +85,8 @@ export default function HomeScreen() {
       await loadStats('30d');
       await loadSuggestions();
     })();
+
+    return () => { cleanupInterstitial(); };
   }, []);
 
   const refreshCounts = async () => {
@@ -203,7 +203,7 @@ export default function HomeScreen() {
     setRefreshing(true);
     await handleFetch();
     setRefreshing(false);
-  }, [period]);
+  }, [period, loading]);
 
   return (
     <ScrollView

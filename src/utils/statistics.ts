@@ -44,7 +44,7 @@ export interface SuggestedSet {
 // Strategies cho premium
 const STRATEGIES = [
   { name: 'Nóng tập trung', hotCount: 5, warmCount: 0, coldCount: 1 },
-  { name: 'Nóng tập trung', hotCount: 5, warmCount: 0, coldCount: 1 },
+  { name: 'Xu hướng tăng', hotCount: 4, warmCount: 1, coldCount: 1 },
   { name: 'Cân bằng', hotCount: 3, warmCount: 2, coldCount: 1 },
   { name: 'Phục hồi lạnh', hotCount: 3, warmCount: 1, coldCount: 2 },
   { name: 'Đa dạng', hotCount: 2, warmCount: 3, coldCount: 1 },

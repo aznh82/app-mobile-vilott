@@ -43,9 +43,13 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     position: 'absolute',
-    top: 8,
-    right: 12,
+    top: 4,
+    right: 4,
     zIndex: 1,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   closeBtnText: {
     color: colors.textMuted,

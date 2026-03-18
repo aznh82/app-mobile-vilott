@@ -47,6 +47,9 @@ export function usePremium() {
 const PREMIUM_KEY = '@vietlott_premium';
 const APP_OPENS_KEY = '@vietlott_app_opens';
 
+// Track IAP module availability
+let iapAvailable = false;
+
 export function PremiumProvider({ children }: { children: React.ReactNode }) {
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -60,12 +63,22 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        // Check cached premium
+        // Check cached premium (optimistic UI — show premium immediately)
         const cached = await AsyncStorage.getItem(PREMIUM_KEY);
         if (cached === 'true') {
           setIsPremium(true);
-        } else {
-          // Track app opens for upgrade prompt (mỗi 5 lần mở)
+        }
+
+        // Always verify with IAP (overrides cache if no real purchase)
+        const verified = await initIAP();
+        if (!verified && cached === 'true') {
+          // Cache said premium but IAP says no → revoke
+          setIsPremium(false);
+          await AsyncStorage.removeItem(PREMIUM_KEY);
+        }
+
+        // Track app opens for upgrade prompt (free users only)
+        if (!verified) {
           const opensStr = await AsyncStorage.getItem(APP_OPENS_KEY);
           const opens = (parseInt(opensStr || '0', 10) || 0) + 1;
           await AsyncStorage.setItem(APP_OPENS_KEY, String(opens));
@@ -73,7 +86,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
             setShowUpgradePrompt(true);
           }
         }
-        await initIAP();
       } catch (e) {
         console.warn('Premium check failed:', e);
       } finally {
@@ -84,10 +96,13 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     return () => { endIAPConnection(); };
   }, []);
 
-  const initIAP = async () => {
+  /** Returns true if user has verified premium purchase */
+  const initIAP = async (): Promise<boolean> => {
     try {
       const RNIap = require('react-native-iap');
       await RNIap.initConnection();
+      iapAvailable = true;
+
       if (Platform.OS === 'android') {
         const purchases = await RNIap.getAvailablePurchases();
         const hasPremium = purchases.some(
@@ -98,10 +113,14 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
         if (hasPremium) {
           setIsPremium(true);
           await AsyncStorage.setItem(PREMIUM_KEY, 'true');
+          return true;
         }
       }
+      return false;
     } catch (e) {
+      iapAvailable = false;
       console.warn('IAP init failed:', e);
+      return false;
     }
   };
 
@@ -132,6 +151,10 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const purchaseMonthly = useCallback(async () => {
+    if (!iapAvailable) {
+      Alert.alert('Lỗi', 'Tính năng mua hàng không khả dụng trên thiết bị này.');
+      return;
+    }
     try {
       const RNIap = require('react-native-iap');
       const subscriptions = await RNIap.getSubscriptions({
@@ -153,6 +176,10 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const purchaseLifetime = useCallback(async () => {
+    if (!iapAvailable) {
+      Alert.alert('Lỗi', 'Tính năng mua hàng không khả dụng trên thiết bị này.');
+      return;
+    }
     try {
       const RNIap = require('react-native-iap');
       const products = await RNIap.getProducts({ skus: [PRODUCTS.PREMIUM_LIFETIME] });
@@ -172,6 +199,10 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const restorePurchases = useCallback(async () => {
+    if (!iapAvailable) {
+      Alert.alert('Lỗi', 'Tính năng mua hàng không khả dụng trên thiết bị này.');
+      return;
+    }
     try {
       const RNIap = require('react-native-iap');
       const purchases = await RNIap.getAvailablePurchases();
