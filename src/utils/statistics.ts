@@ -182,8 +182,8 @@ export function generateSuggestions(
       }
     }
 
-    const numbers = allPicks.sort((a, b) => a - b);
-    const coldNum = allPicks[allPicks.length - 1]; // last added = cold
+    const coldNum = allPicks[allPicks.length - 1]; // last added = cold pick
+    const numbers = [...allPicks].sort((a, b) => a - b);
 
     sets.push({
       numbers: numbers.map((n) => String(n).padStart(2, '0')),

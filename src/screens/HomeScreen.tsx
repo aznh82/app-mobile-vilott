@@ -171,8 +171,8 @@ export default function HomeScreen() {
           text: 'OK',
           onPress: async () => {
             // Interstitial ad mỗi 3 lần fetch (free users)
-            incrementFetchCount();
-            if (shouldShowInterstitial) {
+            const shouldShow = incrementFetchCount();
+            if (shouldShow) {
               await showInterstitialAd();
               resetInterstitialFlag();
             }

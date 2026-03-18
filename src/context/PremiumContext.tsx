@@ -15,7 +15,7 @@ interface PremiumContextType {
   maxSuggestedSets: number;
   // Ad control
   shouldShowInterstitial: boolean;
-  incrementFetchCount: () => void;
+  incrementFetchCount: () => boolean;
   resetInterstitialFlag: () => void;
   // Upgrade prompt
   showUpgradePrompt: boolean;
@@ -31,7 +31,7 @@ const PremiumContext = createContext<PremiumContextType>({
   loading: true,
   maxSuggestedSets: 3,
   shouldShowInterstitial: false,
-  incrementFetchCount: () => {},
+  incrementFetchCount: () => false,
   resetInterstitialFlag: () => {},
   showUpgradePrompt: false,
   dismissUpgradePrompt: () => {},
@@ -112,13 +112,15 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const incrementFetchCount = useCallback(() => {
-    if (isPremium) return;
+  const incrementFetchCount = useCallback((): boolean => {
+    if (isPremium) return false;
     fetchCountRef.current += 1;
     // Hiển thị interstitial mỗi 3 lần fetch
-    if (fetchCountRef.current % 3 === 0) {
+    const shouldShow = fetchCountRef.current % 3 === 0;
+    if (shouldShow) {
       setShouldShowInterstitial(true);
     }
+    return shouldShow;
   }, [isPremium]);
 
   const resetInterstitialFlag = useCallback(() => {
