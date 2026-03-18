@@ -19,6 +19,8 @@ import {
 } from '../database/database';
 import { fetchNew, fetchAllFrom, fetchJackpotInfo } from '../services/scraper';
 import { calculateStats, generateSuggestions, NumberStats, SuggestedSet } from '../utils/statistics';
+import { usePremium } from '../context/PremiumContext';
+import { preloadInterstitial, showInterstitialAd } from '../services/interstitialAd';
 import Header from '../components/Header';
 import LatestResult from '../components/LatestResult';
 import PeriodFilter from '../components/PeriodFilter';
@@ -28,10 +30,19 @@ import SuggestedSets from '../components/SuggestedSets';
 import AdBanner from '../components/AdBanner';
 import PremiumBadge from '../components/PremiumBadge';
 import PremiumPaywall from '../components/PremiumPaywall';
+import UpgradePromptBanner from '../components/UpgradePromptBanner';
 
 const START_DRAW = '01328';
 
 export default function HomeScreen() {
+  const {
+    isPremium,
+    maxSuggestedSets,
+    shouldShowInterstitial,
+    incrementFetchCount,
+    resetInterstitialFlag,
+  } = usePremium();
+
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [totalDraws, setTotalDraws] = useState(0);
@@ -63,6 +74,10 @@ export default function HomeScreen() {
     (async () => {
       // Initialize Google Mobile Ads
       await MobileAds().initialize();
+      // Preload interstitial for free users
+      if (!isPremium) {
+        preloadInterstitial();
+      }
 
       await initDB();
       await cleanupOldData();
@@ -86,7 +101,6 @@ export default function HomeScreen() {
     if (data) {
       setLatestResult(data);
     }
-    // Fetch jackpot info
     try {
       const info = await fetchJackpotInfo();
       setJackpot(info.jackpot);
@@ -97,9 +111,7 @@ export default function HomeScreen() {
   };
 
   const loadAbsent = async () => {
-    // Luôn lấy từ 156 kỳ gần nhất (~1 năm), không phụ thuộc period
     const allAbsent = await getLongestAbsent(45);
-    // Build NumberStats from absent data for AbsentNumbers component
     const absentStats: NumberStats[] = allAbsent.map((item) => ({
       label: item.number,
       freq: 0,
@@ -112,14 +124,16 @@ export default function HomeScreen() {
   const loadSuggestions = async () => {
     const draws = await getDrawsByPeriod('30d');
     const absent = await getLongestAbsent(10);
-    const sets = generateSuggestions(draws, absent);
+    const sets = generateSuggestions(draws, absent, {
+      count: maxSuggestedSets,
+      advanced: isPremium,
+    });
     setSuggestedSets(sets);
   };
 
   const loadStats = async (p: string) => {
     const id = ++loadStatsIdRef.current;
     const draws = await getDrawsByPeriod(p);
-    // Discard result if a newer request was fired (race condition guard)
     if (id !== loadStatsIdRef.current) return;
     const stats = calculateStats(draws);
     setStatsData(stats);
@@ -153,11 +167,20 @@ export default function HomeScreen() {
       Alert.alert(
         'Hoàn thành',
         `Đã tải ${inserted} kỳ mới`,
-        [{ text: 'OK' }]
+        [{
+          text: 'OK',
+          onPress: async () => {
+            // Interstitial ad mỗi 3 lần fetch (free users)
+            incrementFetchCount();
+            if (shouldShowInterstitial) {
+              await showInterstitialAd();
+              resetInterstitialFlag();
+            }
+          },
+        }]
       );
     } catch (e: any) {
       const msg = e.message || 'Không thể tải dữ liệu';
-      // Phân biệt lỗi mạng vs lỗi parse (scraper bị broken)
       const isParseError = msg.includes('Could not extract') || msg.includes('API error');
       Alert.alert(
         isParseError ? 'Lỗi cấu trúc dữ liệu' : 'Lỗi kết nối',
@@ -173,6 +196,8 @@ export default function HomeScreen() {
   const handleRegenerate = () => {
     loadSuggestions();
   };
+
+  const openPaywall = () => setShowPaywall(true);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -200,7 +225,7 @@ export default function HomeScreen() {
         loading={loading}
         onFetch={handleFetch}
       >
-        <PremiumBadge onPress={() => setShowPaywall(true)} />
+        <PremiumBadge onPress={openPaywall} />
       </Header>
 
       <PremiumPaywall
@@ -216,9 +241,15 @@ export default function HomeScreen() {
         jackpotWinners={jackpotWinners}
       />
 
+      {/* Inline ad: sau kết quả mở thưởng */}
+      <AdBanner placement="inline" />
+
       <PeriodFilter current={period} onChange={handlePeriodChange} />
 
       <FrequencyChart data={statsData} totalDraws={statsTotalDraws} />
+
+      {/* Inline ad: sau biểu đồ tần suất */}
+      <AdBanner placement="inline" />
 
       <AbsentNumbers data={absentData} />
 
@@ -226,9 +257,14 @@ export default function HomeScreen() {
         sets={suggestedSets}
         totalDraws={statsTotalDraws}
         onRegenerate={handleRegenerate}
+        onUpgrade={openPaywall}
       />
 
-      <AdBanner />
+      {/* Soft upgrade prompt (mỗi 5 lần mở app) */}
+      <UpgradePromptBanner onUpgrade={openPaywall} />
+
+      {/* Bottom banner ad */}
+      <AdBanner placement="bottom" />
     </ScrollView>
   );
 }

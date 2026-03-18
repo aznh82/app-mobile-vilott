@@ -1,16 +1,26 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Product IDs - phải khớp với Google Play Console
 export const PRODUCTS = {
-  PREMIUM_MONTHLY: 'vietlott_premium_monthly',   // $1.99/tháng
-  PREMIUM_LIFETIME: 'vietlott_premium_lifetime',  // $4.99 mua 1 lần
+  PREMIUM_MONTHLY: 'vietlott_premium_monthly',
+  PREMIUM_LIFETIME: 'vietlott_premium_lifetime',
 };
 
 interface PremiumContextType {
   isPremium: boolean;
   loading: boolean;
+  // Feature gating
+  maxSuggestedSets: number;
+  // Ad control
+  shouldShowInterstitial: boolean;
+  incrementFetchCount: () => void;
+  resetInterstitialFlag: () => void;
+  // Upgrade prompt
+  showUpgradePrompt: boolean;
+  dismissUpgradePrompt: () => void;
+  // Purchase
   purchaseMonthly: () => Promise<void>;
   purchaseLifetime: () => Promise<void>;
   restorePurchases: () => Promise<void>;
@@ -19,6 +29,12 @@ interface PremiumContextType {
 const PremiumContext = createContext<PremiumContextType>({
   isPremium: false,
   loading: true,
+  maxSuggestedSets: 3,
+  shouldShowInterstitial: false,
+  incrementFetchCount: () => {},
+  resetInterstitialFlag: () => {},
+  showUpgradePrompt: false,
+  dismissUpgradePrompt: () => {},
   purchaseMonthly: async () => {},
   purchaseLifetime: async () => {},
   restorePurchases: async () => {},
@@ -29,20 +45,34 @@ export function usePremium() {
 }
 
 const PREMIUM_KEY = '@vietlott_premium';
+const APP_OPENS_KEY = '@vietlott_app_opens';
 
 export function PremiumProvider({ children }: { children: React.ReactNode }) {
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [shouldShowInterstitial, setShouldShowInterstitial] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const fetchCountRef = useRef(0);
 
-  // Check cached premium status on mount
+  // Derived
+  const maxSuggestedSets = isPremium ? 5 : 3;
+
   useEffect(() => {
     (async () => {
       try {
+        // Check cached premium
         const cached = await AsyncStorage.getItem(PREMIUM_KEY);
         if (cached === 'true') {
           setIsPremium(true);
+        } else {
+          // Track app opens for upgrade prompt (mỗi 5 lần mở)
+          const opensStr = await AsyncStorage.getItem(APP_OPENS_KEY);
+          const opens = (parseInt(opensStr || '0', 10) || 0) + 1;
+          await AsyncStorage.setItem(APP_OPENS_KEY, String(opens));
+          if (opens % 5 === 0) {
+            setShowUpgradePrompt(true);
+          }
         }
-        // Try to initialize IAP and verify purchases
         await initIAP();
       } catch (e) {
         console.warn('Premium check failed:', e);
@@ -51,17 +81,13 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
       }
     })();
 
-    return () => {
-      endIAPConnection();
-    };
+    return () => { endIAPConnection(); };
   }, []);
 
   const initIAP = async () => {
     try {
       const RNIap = require('react-native-iap');
       await RNIap.initConnection();
-
-      // Check existing purchases (restore)
       if (Platform.OS === 'android') {
         const purchases = await RNIap.getAvailablePurchases();
         const hasPremium = purchases.some(
@@ -75,7 +101,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (e) {
-      // IAP not available (emulator, dev mode, etc.)
       console.warn('IAP init failed:', e);
     }
   };
@@ -87,22 +112,34 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
+  const incrementFetchCount = useCallback(() => {
+    if (isPremium) return;
+    fetchCountRef.current += 1;
+    // Hiển thị interstitial mỗi 3 lần fetch
+    if (fetchCountRef.current % 3 === 0) {
+      setShouldShowInterstitial(true);
+    }
+  }, [isPremium]);
+
+  const resetInterstitialFlag = useCallback(() => {
+    setShouldShowInterstitial(false);
+  }, []);
+
+  const dismissUpgradePrompt = useCallback(() => {
+    setShowUpgradePrompt(false);
+  }, []);
+
   const purchaseMonthly = useCallback(async () => {
     try {
       const RNIap = require('react-native-iap');
       const subscriptions = await RNIap.getSubscriptions({
         skus: [PRODUCTS.PREMIUM_MONTHLY],
       });
-
       if (subscriptions.length === 0) {
         Alert.alert('Lỗi', 'Không tìm thấy gói Premium. Vui lòng thử lại sau.');
         return;
       }
-
-      await RNIap.requestSubscription({
-        sku: PRODUCTS.PREMIUM_MONTHLY,
-      });
-
+      await RNIap.requestSubscription({ sku: PRODUCTS.PREMIUM_MONTHLY });
       setIsPremium(true);
       await AsyncStorage.setItem(PREMIUM_KEY, 'true');
       Alert.alert('Thành công! 🎉', 'Bạn đã nâng cấp lên Premium!');
@@ -116,19 +153,12 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   const purchaseLifetime = useCallback(async () => {
     try {
       const RNIap = require('react-native-iap');
-      const products = await RNIap.getProducts({
-        skus: [PRODUCTS.PREMIUM_LIFETIME],
-      });
-
+      const products = await RNIap.getProducts({ skus: [PRODUCTS.PREMIUM_LIFETIME] });
       if (products.length === 0) {
         Alert.alert('Lỗi', 'Không tìm thấy gói Premium. Vui lòng thử lại sau.');
         return;
       }
-
-      await RNIap.requestPurchase({
-        sku: PRODUCTS.PREMIUM_LIFETIME,
-      });
-
+      await RNIap.requestPurchase({ sku: PRODUCTS.PREMIUM_LIFETIME });
       setIsPremium(true);
       await AsyncStorage.setItem(PREMIUM_KEY, 'true');
       Alert.alert('Thành công! 🎉', 'Bạn đã nâng cấp lên Premium vĩnh viễn!');
@@ -148,7 +178,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
           p.productId === PRODUCTS.PREMIUM_MONTHLY ||
           p.productId === PRODUCTS.PREMIUM_LIFETIME
       );
-
       if (hasPremium) {
         setIsPremium(true);
         await AsyncStorage.setItem(PREMIUM_KEY, 'true');
@@ -163,7 +192,19 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <PremiumContext.Provider
-      value={{ isPremium, loading, purchaseMonthly, purchaseLifetime, restorePurchases }}
+      value={{
+        isPremium,
+        loading,
+        maxSuggestedSets,
+        shouldShowInterstitial,
+        incrementFetchCount,
+        resetInterstitialFlag,
+        showUpgradePrompt,
+        dismissUpgradePrompt,
+        purchaseMonthly,
+        purchaseLifetime,
+        restorePurchases,
+      }}
     >
       {children}
     </PremiumContext.Provider>

@@ -7,7 +7,6 @@ export interface NumberStats {
 }
 
 export function calculateStats(draws: DrawRow[]): NumberStats[] {
-  // Count frequency
   const counter: Record<number, number> = {};
   for (const draw of draws) {
     for (const num of [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6]) {
@@ -15,7 +14,6 @@ export function calculateStats(draws: DrawRow[]): NumberStats[] {
     }
   }
 
-  // Calculate absence (draws since last seen)
   const lastSeen: Record<number, number> = {};
   draws.forEach((draw, i) => {
     for (const num of [draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6]) {
@@ -40,12 +38,58 @@ export function calculateStats(draws: DrawRow[]): NumberStats[] {
 export interface SuggestedSet {
   numbers: string[];
   cold: string;
+  strategy?: string; // chỉ hiện cho premium
+}
+
+// Strategies cho premium
+const STRATEGIES = [
+  { name: 'Nóng tập trung', hotCount: 5, warmCount: 0, coldCount: 1 },
+  { name: 'Nóng tập trung', hotCount: 5, warmCount: 0, coldCount: 1 },
+  { name: 'Cân bằng', hotCount: 3, warmCount: 2, coldCount: 1 },
+  { name: 'Phục hồi lạnh', hotCount: 3, warmCount: 1, coldCount: 2 },
+  { name: 'Đa dạng', hotCount: 2, warmCount: 3, coldCount: 1 },
+];
+
+function weightedPick(
+  pool: number[],
+  weights: number[],
+  count: number
+): number[] {
+  const available = [...pool];
+  const availWeights = [...weights];
+  const picks: number[] = [];
+
+  for (let j = 0; j < count && available.length > 0; j++) {
+    const totalWeight = availWeights.reduce((a, b) => a + b, 0);
+    let rand = Math.random() * totalWeight;
+    let chosenIdx = 0;
+    for (let k = 0; k < availWeights.length; k++) {
+      rand -= availWeights[k];
+      if (rand <= 0) {
+        chosenIdx = k;
+        break;
+      }
+    }
+    picks.push(available[chosenIdx]);
+    available.splice(chosenIdx, 1);
+    availWeights.splice(chosenIdx, 1);
+  }
+  return picks;
+}
+
+interface SuggestionOptions {
+  count?: number;
+  advanced?: boolean;
 }
 
 export function generateSuggestions(
   draws: DrawRow[],
-  absentData: { number: string; absent_draws: number }[]
+  absentData: { number: string; absent_draws: number }[],
+  options?: SuggestionOptions
 ): SuggestedSet[] {
+  const count = options?.count ?? 5;
+  const advanced = options?.advanced ?? false;
+
   if (draws.length === 0) return [];
 
   const counter: Record<number, number> = {};
@@ -55,52 +99,98 @@ export function generateSuggestions(
     }
   }
 
-  // Sort by frequency desc
   const sortedNums = Array.from({ length: 45 }, (_, i) => i + 1).sort(
     (a, b) => (counter[b] || 0) - (counter[a] || 0)
   );
-  const top10 = sortedNums.slice(0, 10);
-  const rest = sortedNums.slice(10);
+
   const absentNums = absentData.map((item) => parseInt(item.number, 10));
 
-  const sets: SuggestedSet[] = [];
-  for (let i = 0; i < 5; i++) {
-    // Pick 5 from top10 using weighted random
-    const available = [...top10];
-    const hotPicks: number[] = [];
-    for (let j = 0; j < 5; j++) {
-      const weights = available.map((n) => (counter[n] || 0) + 1);
-      const totalWeight = weights.reduce((a, b) => a + b, 0);
-      let rand = Math.random() * totalWeight;
-      let chosenIdx = 0;
-      for (let k = 0; k < weights.length; k++) {
-        rand -= weights[k];
-        if (rand <= 0) {
-          chosenIdx = k;
-          break;
-        }
-      }
-      hotPicks.push(available[chosenIdx]);
-      available.splice(chosenIdx, 1);
-    }
+  if (!advanced) {
+    // === FREE TIER: thuật toán cơ bản (5 hot + 1 random/cold) ===
+    const top10 = sortedNums.slice(0, 10);
+    const rest = sortedNums.slice(10);
+    const sets: SuggestedSet[] = [];
 
-    // Cold pick
-    let coldPick: number;
-    if (i >= 3 && absentNums.length > 0) {
-      const candidates = absentNums.filter((n) => !hotPicks.includes(n));
-      coldPick =
-        candidates.length > 0
+    for (let i = 0; i < count; i++) {
+      const hotPicks = weightedPick(
+        top10,
+        top10.map((n) => (counter[n] || 0) + 1),
+        5
+      );
+
+      let coldPick: number;
+      if (i >= 2 && absentNums.length > 0) {
+        const candidates = absentNums.filter((n) => !hotPicks.includes(n));
+        coldPick = candidates.length > 0
           ? candidates[Math.floor(Math.random() * candidates.length)]
           : rest[Math.floor(Math.random() * rest.length)];
-    } else {
-      coldPick = rest[Math.floor(Math.random() * rest.length)];
+      } else {
+        coldPick = rest[Math.floor(Math.random() * rest.length)];
+      }
+
+      const numbers = [...hotPicks, coldPick].sort((a, b) => a - b);
+      sets.push({
+        numbers: numbers.map((n) => String(n).padStart(2, '0')),
+        cold: String(coldPick).padStart(2, '0'),
+      });
+    }
+    return sets;
+  }
+
+  // === PREMIUM TIER: thuật toán nâng cao (nhiều chiến lược) ===
+  const top15 = sortedNums.slice(0, 15);  // Pool rộng hơn
+  const warm = sortedNums.slice(10, 25);   // Số trung bình
+  const coldPool = sortedNums.slice(25);   // Số ít xuất hiện
+  const sets: SuggestedSet[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const strategy = STRATEGIES[i % STRATEGIES.length];
+    const allPicks: number[] = [];
+
+    // Hot picks
+    const hotPicks = weightedPick(
+      top15,
+      top15.map((n) => (counter[n] || 0) + 1),
+      strategy.hotCount
+    );
+    allPicks.push(...hotPicks);
+
+    // Warm picks
+    if (strategy.warmCount > 0) {
+      const warmAvailable = warm.filter((n) => !allPicks.includes(n));
+      const warmPicks = weightedPick(
+        warmAvailable,
+        warmAvailable.map((n) => (counter[n] || 0) + 1),
+        strategy.warmCount
+      );
+      allPicks.push(...warmPicks);
     }
 
-    const numbers = [...hotPicks, coldPick].sort((a, b) => a - b);
+    // Cold picks
+    for (let c = 0; c < strategy.coldCount; c++) {
+      // Ưu tiên từ absent list
+      if (absentNums.length > 0) {
+        const candidates = absentNums.filter((n) => !allPicks.includes(n));
+        if (candidates.length > 0) {
+          allPicks.push(candidates[Math.floor(Math.random() * candidates.length)]);
+          continue;
+        }
+      }
+      const coldAvailable = coldPool.filter((n) => !allPicks.includes(n));
+      if (coldAvailable.length > 0) {
+        allPicks.push(coldAvailable[Math.floor(Math.random() * coldAvailable.length)]);
+      }
+    }
+
+    const numbers = allPicks.sort((a, b) => a - b);
+    const coldNum = allPicks[allPicks.length - 1]; // last added = cold
+
     sets.push({
       numbers: numbers.map((n) => String(n).padStart(2, '0')),
-      cold: String(coldPick).padStart(2, '0'),
+      cold: String(coldNum).padStart(2, '0'),
+      strategy: strategy.name,
     });
   }
+
   return sets;
 }
