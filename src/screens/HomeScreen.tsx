@@ -5,7 +5,12 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
-import { MobileAds } from 'react-native-google-mobile-ads';
+let MobileAds: any;
+try {
+  MobileAds = require('react-native-google-mobile-ads').MobileAds;
+} catch {
+  // AdMob not available
+}
 import { colors } from '../theme';
 import {
   initDB,
@@ -72,10 +77,15 @@ export default function HomeScreen() {
   // Initialize DB and load data
   useEffect(() => {
     (async () => {
-      // Initialize Google Mobile Ads
-      await MobileAds().initialize();
-      // Preload interstitial (premium check is in incrementFetchCount)
-      preloadInterstitial();
+      // Initialize Google Mobile Ads (non-blocking — ads are optional)
+      try {
+        if (MobileAds) {
+          await MobileAds().initialize();
+        }
+        preloadInterstitial();
+      } catch (e) {
+        console.warn('AdMob init failed (ads disabled):', e);
+      }
 
       await initDB();
       await cleanupOldData();

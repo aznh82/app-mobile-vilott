@@ -1,8 +1,17 @@
-import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
+let InterstitialAd: any;
+let AdEventType: any;
 
-// TODO: Tạo interstitial ad unit trên AdMob Console, tạm dùng banner ID
+try {
+  const ads = require('react-native-google-mobile-ads');
+  InterstitialAd = ads.InterstitialAd;
+  AdEventType = ads.AdEventType;
+} catch {
+  // AdMob not available
+}
+
+// TODO: Tạo interstitial ad unit riêng trên AdMob Console
 const AD_UNIT_ID = __DEV__
-  ? TestIds.INTERSTITIAL
+  ? 'ca-app-pub-3940256099942544/1033173712'
   : 'ca-app-pub-5240031366086683/5898684425';
 
 let interstitial: ReturnType<typeof InterstitialAd.createForAdRequest> | null = null;
@@ -12,6 +21,7 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_RETRIES = 5;
 
 function createAndLoad() {
+  if (!InterstitialAd) return; // AdMob not available
   interstitial = InterstitialAd.createForAdRequest(AD_UNIT_ID, {
     keywords: ['lottery', 'statistics', 'vietlott'],
   });
