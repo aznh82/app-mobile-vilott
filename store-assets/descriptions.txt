@@ -1,0 +1,52 @@
+============================
+SHORT DESCRIPTION (max 80 chars)
+============================
+Thống kê, phân tích tần suất và gợi ý bộ số Vietlott 6/45 thông minh.
+
+============================
+LONG DESCRIPTION (max 4000 chars)
+============================
+Vietlott 6/45 - Thống Kê & Phân Tích Chuyên Sâu
+
+Ứng dụng tra cứu kết quả, phân tích thống kê và gợi ý bộ số xổ số Vietlott 6/45 dành cho người dùng Việt Nam. Với giao diện tối hiện đại và cơ sở dữ liệu SQLite tốc độ cao, bạn luôn có trong tay những con số mới nhất và phân tích chính xác nhất.
+
+📊 KẾT QUẢ XSKT TRỰC TIẾP
+• Hiển thị kết quả xổ số Vietlott 6/45 mới nhất ngay khi có
+• Đồng hồ đếm ngược đến kỳ quay tiếp theo
+• Lịch sử kết quả theo kỳ, dễ tra cứu
+
+📈 PHÂN TÍCH TẦN SUẤT ĐẦY ĐỦ
+• Biểu đồ tần suất xuất hiện của toàn bộ 45 con số
+• Phân loại số NÓNG (xuất hiện nhiều), số LẠNH (vắng lâu nhất)
+• Top 10 số vắng mặt lâu nhất trong 156 kỳ quay gần đây (tương đương 1 năm)
+• Bộ lọc theo khoảng thời gian linh hoạt
+
+🎯 GỢI Ý BỘ SỐ THÔNG MINH
+• 5 bộ số gợi ý được tính toán tự động mỗi kỳ
+• Kết hợp số nóng và số lạnh theo tỷ lệ tối ưu
+• Thuật toán dựa trên thống kê tần suất thực tế
+• Cập nhật sau mỗi kỳ quay mới
+
+⭐ TÍNH NĂNG PREMIUM
+• Thuật toán đa chiến lược nâng cao: phân tích xu hướng, chu kỳ và mô hình kết hợp
+• Bộ số gợi ý Premium có độ chính xác thống kê cao hơn
+• Trải nghiệm không quảng cáo hoàn toàn
+• Mua một lần, dùng mãi mãi - không tính phí định kỳ
+
+🌙 GIAO DIỆN & HIỆU NĂNG
+• Giao diện Dark Theme hiện đại, thân thiện với mắt
+• Cơ sở dữ liệu SQLite nội bộ - truy vấn cực nhanh
+• Không yêu cầu đăng ký tài khoản
+• Nhẹ và tiết kiệm pin
+
+🔒 BẢO MẬT & QUYỀN RIÊNG TƯ
+• Không thu thập thông tin cá nhân
+• Toàn bộ dữ liệu thống kê được lưu trên thiết bị của bạn
+• Không yêu cầu đăng nhập hay tạo tài khoản
+
+---
+⚠️ TUYÊN BỐ MIỄN TRỪ TRÁCH NHIỆM
+Ứng dụng chỉ mang tính tham khảo thống kê, không đảm bảo trúng thưởng. Xổ số là trò chơi may rủi. Hãy chơi có trách nhiệm.
+---
+
+Từ khóa: vietlott, xổ số, 6/45, thống kê xổ số, dự đoán số, kết quả xổ số, phân tích tần suất, số may mắn

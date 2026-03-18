@@ -1,0 +1,42 @@
+============================
+PHIÊN BẢN 1.1.1 – Ghi chú phát hành
+============================
+
+🔧 Sửa lỗi & Cải tiến hiệu năng
+
+• Sửa lỗi race condition trong timing hiển thị quảng cáo xen kẽ (interstitial)
+  khiến đôi khi quảng cáo hiển thị trước khi màn hình chính sẵn sàng.
+
+• Sửa lỗi phát hiện "số lạnh" (cold number): một số con số vắng mặt lâu
+  bị bỏ sót trong tính toán do điều kiện so sánh không chính xác.
+
+• Cải thiện độ chính xác của Top 10 số vắng mặt lâu nhất – kết quả
+  hiện phản ánh đúng 156 kỳ quay gần nhất (tương đương 1 năm).
+
+• Tăng tốc độ truy vấn cơ sở dữ liệu SQLite khi tải lịch sử kết quả.
+
+• Ổn định hóa màn hình đếm ngược đến kỳ quay tiếp theo.
+
+============================
+PHIÊN BẢN 1.1.0
+============================
+
+⭐ Mô hình Hybrid: Miễn phí + Premium
+
+• Ra mắt gói Premium: mua một lần, không quảng cáo, thuật toán đa chiến lược
+• Tích hợp Google AdMob: banner và quảng cáo xen kẽ cho phiên bản miễn phí
+• Thêm màn hình giới thiệu Premium với so sánh tính năng chi tiết
+• Cải thiện giao diện trang chủ và luồng điều hướng
+
+============================
+PHIÊN BẢN 1.0.0
+============================
+
+🚀 Phát hành lần đầu
+
+• Kết quả xổ số Vietlott 6/45 mới nhất với đồng hồ đếm ngược
+• Phân tích tần suất toàn bộ 45 con số
+• Top 10 số vắng mặt lâu nhất
+• 5 bộ số gợi ý thông minh (kết hợp số nóng + số lạnh)
+• Giao diện Dark Theme
+• Cơ sở dữ liệu SQLite nội bộ, nhanh và không cần internet liên tục
