@@ -5,6 +5,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
+import { MobileAds } from 'react-native-google-mobile-ads';
 import { colors } from '../theme';
 import {
   initDB,
@@ -24,6 +25,7 @@ import PeriodFilter from '../components/PeriodFilter';
 import FrequencyChart from '../components/FrequencyChart';
 import AbsentNumbers from '../components/AbsentNumbers';
 import SuggestedSets from '../components/SuggestedSets';
+import AdBanner from '../components/AdBanner';
 
 const START_DRAW = '01328';
 
@@ -55,6 +57,9 @@ export default function HomeScreen() {
   // Initialize DB and load data
   useEffect(() => {
     (async () => {
+      // Initialize Google Mobile Ads
+      await MobileAds().initialize();
+
       await initDB();
       await cleanupOldData();
       await refreshCounts();
@@ -211,6 +216,8 @@ export default function HomeScreen() {
         totalDraws={statsTotalDraws}
         onRegenerate={handleRegenerate}
       />
+
+      <AdBanner />
     </ScrollView>
   );
 }
