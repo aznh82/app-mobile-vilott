@@ -9,10 +9,12 @@ try {
   // AdMob not available
 }
 
-// TODO: Tạo interstitial ad unit riêng trên AdMob Console
+// TODO: Tạo interstitial ad unit ID riêng trên AdMob Console
+// Hiện tại tạm TẮT interstitial trong production cho đến khi có ID riêng
+// Banner ID KHÔNG dùng được cho interstitial → sẽ crash
 const AD_UNIT_ID = __DEV__
-  ? 'ca-app-pub-3940256099942544/1033173712'
-  : 'ca-app-pub-5240031366086683/5898684425';
+  ? 'ca-app-pub-3940256099942544/1033173712'  // Google test interstitial
+  : '';  // Tạm để trống — sẽ không load
 
 let interstitial: ReturnType<typeof InterstitialAd.createForAdRequest> | null = null;
 let isLoaded = false;
@@ -21,7 +23,7 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_RETRIES = 5;
 
 function createAndLoad() {
-  if (!InterstitialAd) return; // AdMob not available
+  if (!InterstitialAd || !AD_UNIT_ID) return; // AdMob not available or no ad unit configured
   interstitial = InterstitialAd.createForAdRequest(AD_UNIT_ID, {
     keywords: ['lottery', 'statistics', 'vietlott'],
   });

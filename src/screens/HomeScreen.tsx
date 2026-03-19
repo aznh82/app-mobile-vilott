@@ -9,7 +9,7 @@ let MobileAds: any;
 try {
   MobileAds = require('react-native-google-mobile-ads').MobileAds;
 } catch {
-  // AdMob not available
+  // AdMob not available — app works without ads
 }
 import { colors } from '../theme';
 import {
@@ -50,6 +50,7 @@ export default function HomeScreen() {
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [adReady, setAdReady] = useState(false);
   const [totalDraws, setTotalDraws] = useState(0);
   const [latestDrawNum, setLatestDrawNum] = useState<string | null>(null);
   const [period, setPeriod] = useState('30d');
@@ -81,8 +82,9 @@ export default function HomeScreen() {
       try {
         if (MobileAds) {
           await MobileAds().initialize();
+          setAdReady(true); // Chỉ render AdBanner SAU KHI SDK sẵn sàng
+          preloadInterstitial();
         }
-        preloadInterstitial();
       } catch (e) {
         console.warn('AdMob init failed (ads disabled):', e);
       }
@@ -252,14 +254,14 @@ export default function HomeScreen() {
       />
 
       {/* Inline ad: sau kết quả mở thưởng */}
-      <AdBanner placement="inline" />
+      {adReady && <AdBanner placement="inline" />}
 
       <PeriodFilter current={period} onChange={handlePeriodChange} />
 
       <FrequencyChart data={statsData} totalDraws={statsTotalDraws} />
 
       {/* Inline ad: sau biểu đồ tần suất */}
-      <AdBanner placement="inline" />
+      {adReady && <AdBanner placement="inline" />}
 
       <AbsentNumbers data={absentData} />
 
@@ -274,7 +276,7 @@ export default function HomeScreen() {
       <UpgradePromptBanner onUpgrade={openPaywall} />
 
       {/* Bottom banner ad */}
-      <AdBanner placement="bottom" />
+      {adReady && <AdBanner placement="bottom" />}
     </ScrollView>
   );
 }
