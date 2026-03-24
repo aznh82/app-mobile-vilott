@@ -1,159 +1,314 @@
-# Phase 2: Multi-Game Scraper
+# Phase 2: Frontend
 
 ## Goal
-Build a generic scraper factory that fetches draw results for all 5 games using Vietlott's AjaxPro API. After this phase, all 5 games can fetch and store historical data.
+Build the complete user-facing app: generic multi-game scraper, redesigned HomeScreen dashboard,
+per-game detail screens, statistics screens with frequency/absent/AI suggestions, and adapt all
+statistics logic for different number ranges. After this phase every screen is functional end-to-end.
 
 ## Data Flow
 ```
-GameConfig.webPartClass → buildAjaxUrl() → fetchPage(gameId, key, renderInfo, page)
-fetchPage() → HTML string → parseResults(gameId, html) → [drawNumber, date, numbers[]][]
-fetchAllFrom(gameId) → saveDraws(gameId, results) → SQLite per-game table
+HomeScreen (mount)
+  └── getLatestDrawFull(gameId) × 5  ────────────► DB (5 tables)
+  └── if empty → fetchAllGames()
+        └── fetchPage(gameId, key, renderInfo, page)
+              └── Vietlott AjaxPro API
+              └── parseResults(gameId, html)
+              └── saveDraws(gameId, rows)  ────────► DB
+
+User taps game card
+  └── navigate(GameDetail, { gameId })
+        └── GameDetailScreen
+              └── getDrawsByPeriod(gameId, period)  ► DB
+              └── pull-to-refresh → fetchNew(gameId) ► API → DB
+              └── "Thống kê" button (premium)
+                    └── navigate(GameStats, { gameId })
+                          └── GameStatsScreen
+                                └── computeStats(gameId, draws)  (statistics.ts)
+                                └── getSuggestions(gameId, draws) (statistics.ts)
+
+Max 3D screen
+  └── GameDetailScreen(gameId='max3d')
+        └── internal tab toggle → gameId 'max3d' | 'max3d_pro'
+        └── Each side: Max3DResult component
 ```
 
 ## Code Contracts
 
 ```typescript
-// src/services/scraper.ts — refactored to multi-game
-
-// Internal: build AJAX URL from GameConfig
-function getAjaxUrl(gameId: GameId): string;
-// Returns: `${BASE_URL}/ajaxpro/Vietlott.PlugIn.WebParts.${config.webPartClass},Vietlott.PlugIn.WebParts.ashx`
-
-// Internal: get API key from game's page
-function getApiKey(gameId: GameId): Promise<string>;
-// Fetches config.pageUrl, extracts key via regex
-
-// Internal: fetch one page of results
-function fetchPage(gameId: GameId, key: string, renderInfo: any, pageIndex: number): Promise<string>;
-
-// Internal: parse HTML into draw results
-// For 6/45, 6/55: extracts 6 numbers from <span class="bong_tron">
-// For 5/35: extracts 5 numbers + 1 special number
-// For Max 3D: extracts prize-tier numbers (different HTML structure)
-function parseResults(gameId: GameId, html: string): [string, string, number[], number?][];
-
-// Public: fetch all history from startDraw
+// src/services/scraper.ts  (refactored)
 export function fetchAllFrom(
   gameId: GameId,
   startDraw?: string,
   onProgress?: (page: number, count: number) => void
 ): Promise<[string, string, number[], number?][]>;
 
-// Public: fetch only new draws since latestDraw
 export function fetchNew(
   gameId: GameId,
   latestDraw: string
 ): Promise<[string, string, number[], number?][]>;
 
-// Public: fetch jackpot info (only for 6/45, 6/55)
 export function fetchJackpotInfo(gameId: GameId): Promise<{
   jackpot: string | null;
   jackpot_winners: string | null;
 }>;
 
-// Public: fetch all games concurrently
 export function fetchAllGames(
   onProgress?: (gameId: GameId, page: number, count: number) => void
-): Promise<Record<GameId, number>>; // returns count of new draws per game
+): Promise<Record<GameId, number>>;  // new draws count per game
+
+// src/utils/statistics.ts  (adapted)
+export interface StatsResult {
+  frequency: { number: number; count: number }[];
+  absentNumbers: { number: number; absent: number }[];
+  suggestions: number[][];
+}
+
+export function computeStats(
+  gameId: GameId,
+  draws: DrawRow[]
+): StatsResult;
+// Uses GAME_CONFIGS[gameId] for number range
+// Max 3D: top/bottom 20 by frequency only (no suggestions)
+// Lottery games: full frequency + absent + AI suggestions
+
+export function generateSuggestions(
+  gameId: GameId,
+  draws: DrawRow[],
+  count?: number
+): number[][];
+// Returns count (default 5) sets of numbers for lottery games
+// Returns [] for Max 3D games
+
+// src/screens/HomeScreen.tsx  (redesigned)
+// Shows 5 GameResultCards. Triggers fetchAllGames on first launch.
+
+// src/components/GameResultCard.tsx  (new)
+interface GameResultCardProps {
+  gameId: GameId;
+  config: GameConfig;
+  drawNumber: string | null;
+  drawDate: string | null;
+  numbers: number[];
+  specialNumber?: number;
+  jackpot?: string | null;
+  onPress: () => void;
+}
+export default function GameResultCard(props: GameResultCardProps): JSX.Element;
+
+// src/screens/GameDetailScreen.tsx  (new)
+// Receives { gameId } from route.params
+// Renders: LatestResult (or Max3DResult), draw history FlatList, refresh, stats button
+
+// src/screens/GameStatsScreen.tsx  (new — premium gated)
+// Receives { gameId } from route.params
+// Renders: FrequencyChart, AbsentNumbers, SuggestedSets adapted from existing components
+
+// src/components/Max3DResult.tsx  (new)
+interface Max3DResultProps {
+  numbers: number[];   // up to 20 numbers across prize tiers
+  drawNumber: string;
+  drawDate: string;
+  isProVariant?: boolean;
+}
+export default function Max3DResult(props: Max3DResultProps): JSX.Element;
+
+// src/navigation/AppNavigator.tsx  (updated — replace placeholders with real screens)
+// Each game tab: Stack with GameDetail + GameStats screens
 ```
 
 ## Tasks
 
 - [ ] Task 1 — Refactor scraper to use GameConfig
   - File: `src/services/scraper.ts` (major modify)
-  - Test: N/A (verified by runtime + tsc)
   - Verify: `npx tsc --noEmit`
-  - Commit: `refactor(scraper): parameterize by GameConfig for multi-game support`
+  - Commit: `refactor(scraper): parameterize all functions by GameId/GameConfig`
   - Logic:
-    - Replace hardcoded URLs/class names with GameConfig lookups
-    - getAjaxUrl builds URL from config.webPartClass
-    - getApiKey fetches config.pageUrl (full URL: BASE_URL + config.pageUrl)
-    - fetchPage sends to getAjaxUrl(gameId) with correct X-AjaxPro-Method
-    - Keep existing delay(300) between pages
-  - Edge: getRenderInfo() stays shared (same for all games)
+    - Replace hardcoded URLs, class names, page paths with GAME_CONFIGS[gameId] lookups
+    - getAjaxUrl(gameId): `${BASE_URL}/ajaxpro/Vietlott.PlugIn.WebParts.${config.webPartClass},Vietlott.PlugIn.WebParts.ashx`
+    - getApiKey(gameId): fetch BASE_URL + config.pageUrl, extract key via existing regex
+    - Keep delay(300) between pages — rate limiting convention
+    - Keep getRenderInfo() shared across all games
 
 - [ ] Task 2 — Implement parseResults for lottery games (6/45, 6/55, 5/35)
   - File: `src/services/scraper.ts` (continue modify)
-  - Test: N/A
   - Verify: `npx tsc --noEmit`
-  - Commit: `feat(scraper): add parse logic for 6/55 and 5/35 games`
+  - Commit: `feat(scraper): parse results for all three lottery game types`
   - Logic:
-    - 6/45 and 6/55: same parse logic (6 numbers from bong_tron spans) — reuse existing
-    - 5/35: parse 5 main numbers + 1 special number. Result format from API: "AABBCCDDEE|SS"
-      where AA-EE are 5 numbers, SS is special. Parse accordingly.
-    - Use config.numberCount to validate expected count
-  - Edge: 5/35 special number stored as 4th element in tuple: [drawNum, date, numbers[], specialNum]
+    - 6/45 and 6/55: reuse existing bong_tron span regex — same HTML structure
+    - 5/35: parse 5 main numbers + 1 special number; result string format "AA BB CC DD EE | SS"
+    - Special number stored as 4th element of tuple: [drawNum, date, [n1..n5], specialNum]
+    - Validate extracted count against config.numberCount; log warning if mismatch
 
-- [ ] Task 3 — Implement parseResults for Max 3D games
+- [ ] Task 3 — Implement parseResults for Max 3D / Max 3D Pro
   - File: `src/services/scraper.ts` (continue modify)
-  - Test: N/A
   - Verify: `npx tsc --noEmit`
-  - Commit: `feat(scraper): add Max 3D result parsing`
+  - Commit: `feat(scraper): add Max 3D and Max 3D Pro result parsing`
   - Logic:
-    - Max 3D uses different API: GameMax3DResultDetailWebPart
-    - Response has RetExtraParam1 (left content) + RetExtraParam2 (right content) instead of HtmlContent
-    - Parse prize tiers: special (2 nums), first (4), second (6), third (8) = 20 numbers total
-    - Store all 20 numbers as the numbers array
-    - Max 3D Pro: try GameMax3DProResultDetailWebPart or similar endpoint
-  - Edge: Max 3D API response structure differs (RetExtraParam1/2 vs HtmlContent). Handle both.
+    - Max 3D uses RetExtraParam1 (left column) + RetExtraParam2 (right column) in JSON response
+    - Extract numbers from both columns: special (2), first (4), second (6), third (8) = 20 total
+    - Max 3D Pro uses same RetExtraParam structure with GameMax3DProResultDetailWebPart
+    - Store all prize-tier numbers as flat numbers array; order is preserved for display
+  - Edge: If RetExtraParam1/2 missing, fall back to HtmlContent parse; log warning
 
 - [ ] Task 4 — Implement fetchAllGames concurrent loader
   - File: `src/services/scraper.ts` (continue modify)
-  - Test: N/A
   - Verify: `npx tsc --noEmit`
-  - Commit: `feat(scraper): add concurrent multi-game fetch`
+  - Commit: `feat(scraper): concurrent multi-game fetch with per-game progress callback`
   - Logic:
-    - Promise.allSettled for all 5 games
-    - Each game fetches independently — one failure doesn't block others
-    - Returns Record<GameId, number> with count of new draws per game
-    - Calls onProgress callback per game
-  - Edge: If a game's API endpoint is wrong, catch and return 0 for that game
+    - Promise.allSettled over all 5 GameIds
+    - Each settled result: if fulfilled add count, if rejected log warning and record 0
+    - onProgress callback receives (gameId, page, count) for UI progress modal
+    - Returns Record<GameId, number> — count of new draws per game
 
-- [ ] Task 5 — Update HomeScreen to use new scraper API
-  - File: `src/screens/HomeScreen.tsx` (modify)
-  - Test: N/A
-  - Verify: `npx tsc --noEmit`
-  - Commit: `refactor(home): update to use multi-game scraper and database APIs`
+- [ ] Task 5 — Update HomeScreen to multi-game dashboard
+  - File: `src/screens/HomeScreen.tsx` (major rewrite)
+  - Verify: `npx tsc --noEmit`; visual check: 5 game cards visible
+  - Commit: `feat(home): redesign as multi-game dashboard with GameResultCards`
   - Logic:
-    - Change all database calls to pass 'mega645' as gameId
-    - Change scraper calls to pass 'mega645' as gameId
-    - This is a compatibility bridge — HomeScreen still shows only 6/45
-    - Full redesign happens in Phase 3
-  - Edge: Must not break existing functionality — app should work exactly as before
+    - On mount: call getLatestDrawFull(gameId) for each of 5 games
+    - If all 5 return null (first launch): show progress modal, call fetchAllGames(), then reload
+    - Render ScrollView with 5 GameResultCards
+    - Pull-to-refresh: fetchAllGames() then reload all cards
+    - Keep AdBanner (top + bottom), PremiumBadge in header
+    - Remove from HomeScreen: FrequencyChart, AbsentNumbers, SuggestedSets, PeriodFilter
+
+- [ ] Task 6 — Create GameResultCard component
+  - File: `src/components/GameResultCard.tsx` (new)
+  - Verify: `npx tsc --noEmit`
+  - Commit: `feat(ui): add GameResultCard component for home dashboard`
+  - Logic:
+    - Lottery games (6/45, 6/55, 5/35): colored number balls, special number with different color
+    - Max 3D: show "Giải ĐB: XXX  XXX" (just 2 special prize numbers, 3-digit padded)
+    - Jackpot row only if config.hasJackpot === true and jackpot prop is non-null
+    - Empty state: Text "Chưa có dữ liệu" if drawNumber is null
+    - Touchable (TouchableOpacity) → onPress navigates to detail
+
+- [ ] Task 7 — Create GameDetailScreen
+  - File: `src/screens/GameDetailScreen.tsx` (new)
+  - Verify: `npx tsc --noEmit`; navigate to each game from home, data loads
+  - Commit: `feat(screens): add per-game detail screen with draw history and refresh`
+  - Logic:
+    - Receives gameId from route.params; loads config = GAME_CONFIGS[gameId]
+    - Header shows config.name + jackpot if config.hasJackpot
+    - Latest result: Max3DResult for max3d/max3d_pro, LatestResult for others
+    - Draw history: FlatList of rows (draw_number, draw_date, formatted numbers)
+    - Pull-to-refresh: fetchNew(gameId, latestDrawNumber) → saveDraws → reload list
+    - "Thống kê" FAB button at bottom right → navigate to GameStats (locked if not premium)
+    - Max 3D screen: internal toggle tabs "Max 3D" / "Max 3D Pro" switching gameId state
+    - AdBanner at bottom of screen
+
+- [ ] Task 8 — Create Max3DResult component
+  - File: `src/components/Max3DResult.tsx` (new)
+  - Verify: `npx tsc --noEmit`
+  - Commit: `feat(ui): add Max3DResult component with prize tier layout`
+  - Logic:
+    - 4 prize tiers: Giải ĐB (nums[0..1]), Giải nhất (nums[2..5]), Giải nhì (nums[6..11]), Giải ba (nums[12..19])
+    - Each number displayed 3-digit padded: String(n).padStart(3, '0')
+    - Prize tier label + matching accent color per tier
+    - If isProVariant prop, show "Max 3D Pro" label
+  - Edge: If numbers.length < expected for a tier, show dashes for missing slots; console.warn
+
+- [ ] Task 9 — Adapt LatestResult for variable number counts
+  - File: `src/components/LatestResult.tsx` (modify)
+  - Verify: `npx tsc --noEmit`
+  - Commit: `refactor(ui): make LatestResult support 5, 6 numbers and optional special number`
+  - Logic:
+    - Accept numbers: number[] instead of assuming length 6
+    - Accept optional specialNumber: number for 5/35
+    - Render specialNumber with different background color + "Đặc biệt" label if present
+    - No hardcoded assumption about array length
+
+- [ ] Task 10 — Adapt statistics.ts for multi-game
+  - File: `src/utils/statistics.ts` (modify)
+  - Verify: `npx tsc --noEmit`
+  - Commit: `refactor(stats): parameterize statistics and suggestions by GameConfig`
+  - Logic:
+    - computeStats(gameId, draws): derives number range from GAME_CONFIGS[gameId]
+    - For max3d/max3d_pro: compute top/bottom 20 frequency only (no suggestions)
+    - generateSuggestions returns [] for max3d/max3d_pro
+    - All existing 6/45 logic preserved when gameId='mega645'
+
+- [ ] Task 11 — Create GameStatsScreen (premium gated)
+  - File: `src/screens/GameStatsScreen.tsx` (new)
+  - Verify: `npx tsc --noEmit`; screen shows stats for 6/45; locked modal appears for non-premium
+  - Commit: `feat(screens): add per-game statistics screen with premium gate`
+  - Logic:
+    - Receives gameId from route.params
+    - If not premium: show PremiumPaywall modal (existing component)
+    - Load draws via getDrawsByPeriod(gameId, selectedPeriod)
+    - Compute stats via computeStats(gameId, draws)
+    - Render: FrequencyChart, AbsentNumbers (reuse existing components)
+    - Render: SuggestedSets only if !isMax3D (no suggestions for 3D games)
+    - PeriodFilter at top (reuse existing component)
+    - Show interstitial ad on first stats view for free users (existing interstitialAd.ts)
+
+- [ ] Task 12 — Wire real screens into AppNavigator
+  - File: `src/navigation/AppNavigator.tsx` (modify)
+  - Verify: Full navigation flow works; `npx tsc --noEmit`
+  - Commit: `feat(nav): wire GameDetailScreen and GameStatsScreen into navigator`
+  - Logic:
+    - Each game tab: createNativeStackNavigator with GameDetail + GameStats screens
+    - Pass gameId as initial param to GameDetail for each stack
+    - Home tab keeps flat HomeScreen (no stack needed)
+    - Tab icons: use text labels or simple emoji — visual polish deferred to Phase 3
 
 ## Failure Scenarios
 
 | When | Then | Error Type |
 |------|------|-----------|
-| Game's API endpoint returns 404 | Catch, return empty results, log warning | console.warn |
-| API key regex doesn't match on new game page | Throw Error("Could not extract API key") — caught by fetchAllGames | Error |
-| Max 3D response has different structure | Check for RetExtraParam1 first, fall back to HtmlContent | No error |
-| One game fails in fetchAllGames | Promise.allSettled catches it, other games continue | Partial success |
-| Network timeout during multi-game fetch | Each game has independent error handling | Per-game error |
+| Game API endpoint returns 404 or unexpected HTML | Return empty array, console.warn | console.warn |
+| API key regex fails on game page | throw Error caught by fetchAllGames → 0 count for that game | Per-game error |
+| Max 3D RetExtraParam1/2 absent | Fall back to HtmlContent parse; if also absent return [] | console.warn |
+| One game fails in fetchAllGames | Promise.allSettled — other 4 games continue unaffected | Partial success |
+| No data for a game on first launch | GameResultCard shows empty state; user can trigger refresh | No crash |
+| Max 3D numbers array has wrong length | Show available numbers + dashes for missing; console.warn | console.warn |
+| Non-premium user reaches GameStatsScreen | PremiumPaywall modal shown immediately | No crash |
 
 ## Rejection Criteria (DO NOT)
-- ❌ DO NOT break existing 6/45 functionality — it must work exactly as before
-- ❌ DO NOT fetch games sequentially — use Promise.allSettled for concurrency
-- ❌ DO NOT hardcode API keys — always extract from page at runtime
-- ❌ DO NOT remove the delay(300) between pages — rate limiting is important
-- ❌ DO NOT use cheerio or DOM parser — stick with regex (project convention)
+- DO NOT break existing 6/45 functionality — must work identically before and after refactor
+- DO NOT use cheerio or DOM parser — stick with regex (project convention)
+- DO NOT fetch games sequentially — use Promise.allSettled for fetchAllGames
+- DO NOT hardcode API keys — extract from game page at runtime
+- DO NOT remove delay(300) between pagination requests — rate limiting is mandatory
+- DO NOT put statistics components in HomeScreen — they belong in GameStatsScreen only
+- DO NOT add NativeBase, React Native Paper, or any UI library — StyleSheet only
+- DO NOT hardcode 6 numbers in LatestResult — use dynamic array
 
 ## Cross-Phase Context
-- **Assumes from Phase 1**: GameConfig types, GAME_CONFIGS, database functions with gameId param
-- **Exports for Phase 3**: fetchAllGames(), fetchNew(gameId), fetchJackpotInfo(gameId)
-- **Exports for Phase 4**: fetchNew(gameId) for per-game refresh
-- **Interface contract**: Parse result tuple [drawNumber, date, numbers[], specialNumber?] — Phase 3+ depends on this
+- **Assumes from Phase 1**:
+  - `GameId`, `GameConfig`, `GAME_CONFIGS` from `src/types/game.ts`
+  - All DB functions with `(gameId, ...)` signature from `src/database/database.ts`
+  - `RootTabParamList`, `GameStackParamList` from `src/types/navigation.ts`
+  - `AppNavigator` skeleton + `NavigationContainer` in `App.tsx`
+- **Exports to Phase 3**:
+  - All screens complete and navigable
+  - `fetchAllGames` and `fetchNew` working for all 5 games
+  - `computeStats` accepting gameId
+  - AdBanner placeholder in all screens (wiring to real units in Phase 3)
+  - PremiumPaywall present in GameStatsScreen (IAP wiring in Phase 3)
 
 ## Acceptance Criteria
-- [ ] scraper.ts compiles with no TS errors
-- [ ] fetchAllFrom('mega645') returns same data as before refactor
-- [ ] fetchAllFrom('power655') successfully fetches Power 6/55 results
-- [ ] fetchAllFrom('lotto535') successfully fetches Lotto 5/35 results
-- [ ] fetchAllFrom('max3d') successfully fetches Max 3D results
-- [ ] fetchAllGames() runs all 5 games concurrently without blocking on failures
-- [ ] HomeScreen still works (only shows 6/45 data)
-- [ ] `npx tsc --noEmit` passes
+- [ ] HomeScreen shows 5 GameResultCards with current data after scrape
+- [ ] fetchAllGames() runs all 5 games concurrently, failures do not block others
+- [ ] Tapping a game card navigates to correct GameDetailScreen
+- [ ] GameDetailScreen shows draw history for selected game
+- [ ] Pull-to-refresh works on Home and Detail screens
+- [ ] Max 3D screen shows toggle between Max 3D and Max 3D Pro
+- [ ] Max3DResult shows prize tiers with 3-digit padded numbers
+- [ ] LatestResult works with 5-number and 6-number arrays + optional special number
+- [ ] GameStatsScreen shows frequency/absent stats for lottery games
+- [ ] GameStatsScreen shows top/bottom-20 frequency only for Max 3D games
+- [ ] SuggestedSets not rendered for Max 3D games
+- [ ] Non-premium users see PremiumPaywall on GameStatsScreen
+- [ ] `npx tsc --noEmit` passes with zero errors
 
 ## Files Touched
-- `src/services/scraper.ts` — major modify
-- `src/screens/HomeScreen.tsx` — minor modify (add gameId params)
+- `src/services/scraper.ts` — major modify (multi-game generic)
+- `src/screens/HomeScreen.tsx` — major rewrite (dashboard)
+- `src/screens/GameDetailScreen.tsx` — new
+- `src/screens/GameStatsScreen.tsx` — new
+- `src/components/GameResultCard.tsx` — new
+- `src/components/Max3DResult.tsx` — new
+- `src/components/LatestResult.tsx` — modify (variable numbers + special)
+- `src/utils/statistics.ts` — modify (gameId param, Max 3D branch)
+- `src/navigation/AppNavigator.tsx` — modify (real screens replace placeholders)

@@ -1,179 +1,171 @@
-# Phase 3: Screens & Home
+# Phase 3: Ship
 
 ## Goal
-Redesign HomeScreen as overview dashboard (latest results for all 5 games), create per-game detail screens with draw history, and wire up tab navigation. After this phase, users can navigate between games and see results.
+Wire ads and premium IAP to all new screens, add offline/error handling polish, run a production
+EAS build, and submit to the Play Store. After this phase the app is live with all 5 games.
 
 ## Data Flow
 ```
-App opens → HomeScreen → fetchAllGames() → show latest result per game (from DB)
-User taps game card → navigate to GameDetailScreen(gameId)
-GameDetailScreen → getDrawsByPeriod(gameId) → render draw history list
-GameDetailScreen → pull-to-refresh → fetchNew(gameId) → update list
+App launch
+  └── AdMob SDK init (non-blocking, existing logic)
+  └── NavigationContainer → tabs
+
+Any screen
+  └── AdBanner (bottom) → AdMob Banner unit
+  └── Interstitial trigger:
+        - First stats view per session → showInterstitial()
+        - After every 3 refreshes on detail screen → showInterstitial()
+
+GameStatsScreen (non-premium user)
+  └── PremiumPaywall modal
+        └── onPurchase → react-native-iap → PremiumContext.setPremium(true)
+        └── onRestore → react-native-iap.restorePurchases() → setPremium if found
+
+Network errors
+  └── fetchNew / fetchAllGames fails → Alert.alert with retry button
+  └── DB not ready → queue operations, retry after 500ms (existing pattern)
 ```
 
 ## Code Contracts
 
 ```typescript
-// src/screens/HomeScreen.tsx — redesigned as overview dashboard
-// Shows: GameResultCard for each of 5 games, tap navigates to detail
-// Fetches: latest draw for each game from DB on mount
-// Pull-to-refresh: calls fetchAllGames() then reloads all
+// src/services/interstitialAd.ts  (modify — ensure compatible with multi-screen)
+export function showInterstitialAd(): Promise<void>;
+// Already exists; ensure it can be called from GameStatsScreen and GameDetailScreen
 
-// src/components/GameResultCard.tsx (new)
-interface GameResultCardProps {
-  gameId: GameId;
-  gameName: string;
-  drawNumber: string | null;
-  drawDate: string | null;
-  numbers: string[];
-  specialNumber?: string;
-  jackpot?: string | null;
-  onPress: () => void;
+// src/context/PremiumContext.tsx  (verify — no new interface, confirm exports)
+export interface PremiumContextValue {
+  isPremium: boolean;
+  setPremium: (value: boolean) => void;
+  loading: boolean;
 }
-export default function GameResultCard(props: GameResultCardProps): JSX.Element;
+export function usePremium(): PremiumContextValue;
 
-// src/screens/GameDetailScreen.tsx (new — replaces placeholder)
-// Per-game screen: draw history, jackpot info, fetch button
-// Reuses existing components: Header, LatestResult, PeriodFilter, AdBanner
-interface GameDetailScreenProps {
-  route: { params: { gameId: GameId } };
-  navigation: any;
+// src/components/AdBanner.tsx  (verify — already exists, confirm reusable)
+interface AdBannerProps {
+  position?: 'top' | 'bottom';
 }
-export default function GameDetailScreen(props: GameDetailScreenProps): JSX.Element;
+export default function AdBanner(props: AdBannerProps): JSX.Element;
+// Must render without crash when AdMob SDK is unavailable (try/catch wrapper)
 
-// src/components/Max3DResult.tsx (new)
-// Special component for Max 3D prize display (tiers: special, 1st, 2nd, 3rd)
-interface Max3DResultProps {
-  numbers: number[];  // 20 numbers across prize tiers
-  drawNumber: string;
-  drawDate: string;
-}
-export default function Max3DResult(props: Max3DResultProps): JSX.Element;
+// EAS build — no code change, command only
+// npx eas-cli build --platform android --profile production --non-interactive
 ```
 
 ## Tasks
 
-- [ ] Task 1 — Create GameResultCard component
-  - File: `src/components/GameResultCard.tsx` (new)
-  - Test: N/A
-  - Verify: `npx tsc --noEmit`
-  - Commit: `feat(ui): add GameResultCard for home screen overview`
+- [ ] Task 1 — Verify AdBanner renders on all new screens
+  - File: `src/screens/GameDetailScreen.tsx` (verify/modify — add AdBanner if missing)
+  - File: `src/screens/GameStatsScreen.tsx` (verify/modify — add AdBanner if missing)
+  - File: `src/screens/HomeScreen.tsx` (already has AdBanner — confirm still present)
+  - Verify: Visual check — banner visible on all 3 screen types
+  - Commit: `feat(ads): ensure AdBanner present on all game screens`
   - Logic:
-    - Card with game name, latest draw date/number, number balls
-    - For lottery games (6/45, 6/55, 5/35): show colored number balls (reuse bong_tron style)
-    - For Max 3D: show "Giải ĐB: XXX, XXX" (just special prize numbers)
-    - Jackpot amount if available (6/45, 6/55 only)
-    - Touchable → onPress navigates to detail
-    - Dark theme, match existing color palette
-  - Edge: If no data yet (first launch before scrape), show "Chưa có dữ liệu" placeholder
+    - AdBanner at bottom of GameDetailScreen (above safe area)
+    - AdBanner at bottom of GameStatsScreen
+    - HomeScreen already has top + bottom banners — preserve both
+    - AdBanner component must have try/catch so SDK failure does not crash screen
 
-- [ ] Task 2 — Redesign HomeScreen as dashboard
-  - File: `src/screens/HomeScreen.tsx` (major rewrite)
-  - Test: N/A
-  - Verify: `npx tsc --noEmit`
-  - Commit: `feat(home): redesign as multi-game dashboard with result cards`
+- [ ] Task 2 — Wire interstitial ad triggers
+  - File: `src/screens/GameStatsScreen.tsx` (modify — add interstitial trigger)
+  - File: `src/screens/GameDetailScreen.tsx` (modify — add interstitial on refresh)
+  - Verify: On device — interstitial appears after navigating to stats (non-premium)
+  - Commit: `feat(ads): add interstitial triggers on stats view and detail refresh`
   - Logic:
-    - On mount: load latest draw for each game from DB (getLatestDrawFull per game)
-    - Display 5 GameResultCards in a ScrollView
-    - Pull-to-refresh: fetchAllGames() then reload all cards
-    - First launch detection: if no data for any game → trigger fetchAllGames with progress modal
-    - Keep AdBanner (top inline + bottom)
-    - Keep PremiumBadge in header
-    - Remove: FrequencyChart, AbsentNumbers, SuggestedSets, PeriodFilter (moved to stats screen)
-  - Edge: AdMob init stays in HomeScreen (or move to App.tsx). Progress modal for first-time scrape.
+    - GameStatsScreen: call showInterstitialAd() on first mount if !isPremium
+    - GameDetailScreen: track refresh count in useRef; show interstitial every 3 pulls
+    - Wrap showInterstitialAd() in try/catch — never let ad failure crash the screen
 
-- [ ] Task 3 — Create GameDetailScreen
-  - File: `src/screens/GameDetailScreen.tsx` (new, replaces GameScreen.tsx placeholder)
-  - Test: N/A
-  - Verify: `npx tsc --noEmit`
-  - Commit: `feat(screens): add per-game detail screen with draw history`
+- [ ] Task 3 — Verify premium gate on GameStatsScreen
+  - File: `src/screens/GameStatsScreen.tsx` (verify/modify)
+  - File: `src/components/PremiumPaywall.tsx` (verify — existing component)
+  - Verify: Non-premium → paywall shown; after IAP purchase → stats visible
+  - Commit: `fix(premium): confirm paywall blocks GameStatsScreen for all 5 games`
   - Logic:
-    - Receives gameId from navigation params
-    - Load game config from GAME_CONFIGS[gameId]
-    - Show latest result (reuse LatestResult component, adapt for different number counts)
-    - Show draw history list (FlatList with date, draw number, numbers)
-    - Pull-to-refresh: fetchNew(gameId) → saveDraws → reload
-    - Jackpot info: only fetch for 6/45, 6/55 (games with jackpot)
-    - "Thống kê" button → navigates to statistics screen (Phase 4)
-    - AdBanner at bottom
-  - Edge: Max 3D detail uses Max3DResult component instead of LatestResult
+    - usePremium() from PremiumContext — if !isPremium, render PremiumPaywall
+    - PremiumPaywall onPurchase: call react-native-iap purchase flow, on success setPremium(true)
+    - PremiumPaywall onRestore: call restorePurchases(), map product IDs, setPremium if found
+    - After premium: paywall unmounts, stats render immediately
+  - Edge: Premium state must persist across app restarts (AsyncStorage in PremiumContext)
 
-- [ ] Task 4 — Create Max3DResult component
-  - File: `src/components/Max3DResult.tsx` (new)
-  - Test: N/A
-  - Verify: `npx tsc --noEmit`
-  - Commit: `feat(ui): add Max3DResult prize tier display component`
+- [ ] Task 4 — Offline and error handling polish
+  - File: `src/screens/HomeScreen.tsx` (modify — error handling)
+  - File: `src/screens/GameDetailScreen.tsx` (modify — error handling)
+  - Verify: Disable WiFi → refresh → Alert appears with retry; re-enable → retry succeeds
+  - Commit: `fix(ux): add offline error alerts with retry on all fetch operations`
   - Logic:
-    - Display 4 prize tiers: Giải ĐB (2 nums), Giải nhất (4), Giải nhì (6), Giải ba (8)
-    - Each number displayed as 3-digit padded: "003", "297"
-    - Prize tier headers with matching colors
-    - Compact layout — 20 numbers total
-  - Edge: If numbers array length !== 20, show available numbers with warning
+    - fetchAllGames failure in HomeScreen: Alert.alert("Lỗi kết nối", message, [{text:"Thử lại", onPress: reload}])
+    - fetchNew failure in GameDetailScreen: same Alert pattern
+    - On retry, call same fetch function — do not duplicate fetch logic
+    - DB errors: console.warn only (not user-facing) — DB failures are rare and hard to recover
 
-- [ ] Task 5 — Update navigation with real screens
+- [ ] Task 5 — Tab bar icons and navigation polish
   - File: `src/navigation/AppNavigator.tsx` (modify)
-  - File: `src/screens/GameScreen.tsx` (delete — replaced by GameDetailScreen)
-  - Test: N/A
-  - Verify: `npx tsc --noEmit`
-  - Commit: `feat(nav): wire up real screens to tab navigator`
+  - Verify: Visual check — tab bar looks clean on dark background
+  - Commit: `chore(ui): add tab bar icons and polish navigation appearance`
   - Logic:
-    - Home tab → HomeScreen (dashboard)
-    - Each game tab → GameDetailScreen with gameId param
-    - Max 3D tab: single tab, GameDetailScreen handles both Max 3D + Pro (internal tab/toggle)
-    - Tab bar icons: use simple text or emoji initially (can improve later)
-    - Tab bar style: dark background, accent color active, muted inactive
-  - Edge: Navigation params must be typed correctly for TypeScript
+    - Use @expo/vector-icons (already available in Expo SDK) for tab icons
+    - Home: house icon, 6/45 / 6/55 / 5/35: grid or star icon, Max 3D: dice icon
+    - Tab label text matches GameConfig.tabLabel
+    - headerShown: false on all stack navigators (custom headers in screens)
 
-- [ ] Task 6 — Adapt LatestResult component for multi-game
-  - File: `src/components/LatestResult.tsx` (modify)
-  - Test: N/A
-  - Verify: `npx tsc --noEmit`
-  - Commit: `refactor(ui): make LatestResult support variable number counts`
+- [ ] Task 6 — EAS production build
+  - File: `eas.json` (verify production profile exists)
+  - File: `app.json` (verify version bump)
+  - Verify: Build completes without errors; AAB file produced
+  - Commit: `chore(release): bump version for multi-game release`
+  - Command:
+    ```
+    npx eas-cli build --platform android --profile production --non-interactive
+    ```
   - Logic:
-    - Accept optional specialNumber prop (for 5/35)
-    - Accept dynamic numbers array (5, 6, or variable length)
-    - Show special number with different color/label for 5/35
-    - No hardcoded assumption about 6 numbers
-  - Edge: If numbers.length === 0, show placeholder
+    - Increment version in app.json (versionCode + version string)
+    - Verify google-services.json present (AdMob requires it)
+    - Verify BILLING permission in app.json plugins for react-native-iap
+    - Build must complete with zero warnings about missing native modules
 
 ## Failure Scenarios
 
 | When | Then | Error Type |
 |------|------|-----------|
-| No data for a game (first launch) | GameResultCard shows "Chưa có dữ liệu" | No error |
-| fetchAllGames partial failure | Show results for successful games, retry option for failed | Alert per failed game |
-| Navigation to game with no data | GameDetailScreen shows empty state + fetch button | No error |
-| Max 3D numbers array wrong length | Show available numbers, log warning | console.warn |
+| AdMob SDK unavailable (slow init) | AdBanner try/catch renders null; screen works normally | Silent fallback |
+| Interstitial not loaded when triggered | showInterstitialAd() catches error; no crash; no ad shown | Silent catch |
+| IAP purchase fails (network/user cancel) | Alert.alert with friendly message; isPremium stays false | Alert.alert |
+| restorePurchases returns empty | Alert "Không tìm thấy giao dịch cũ"; isPremium unchanged | Alert.alert |
+| EAS build fails: missing google-services.json | Add file from Firebase console, rebuild | Build error |
+| EAS build fails: BILLING permission missing | Confirm app.json has react-native-iap plugin entry | Build error |
 
 ## Rejection Criteria (DO NOT)
-- ❌ DO NOT keep statistics components in HomeScreen — they move to separate stats screen (Phase 4)
-- ❌ DO NOT hardcode 6 numbers in LatestResult — use dynamic array
-- ❌ DO NOT create separate navigation for Max 3D Pro — it's a tab/toggle inside Max 3D screen
-- ❌ DO NOT use any new UI library (no NativeBase, no Paper) — stick with StyleSheet
-- ❌ DO NOT import statistics functions — they belong to Phase 4
+- DO NOT skip the AdBanner try/catch — SDK init is non-blocking and may not be ready
+- DO NOT call showInterstitialAd() for premium users — check isPremium first
+- DO NOT push to Play Store manually — use EAS Submit or deliver the AAB to the user
+- DO NOT bump versionCode without also bumping version string — Play Store rejects it
+- DO NOT add any new screens or features — Phase 3 is wiring and shipping only
 
 ## Cross-Phase Context
-- **Assumes from Phase 1**: GameConfig, GAME_CONFIGS, DB functions with gameId, AppNavigator skeleton
-- **Assumes from Phase 2**: fetchAllGames(), fetchNew(gameId), parseResults for all games
-- **Exports for Phase 4**: GameDetailScreen has "Thống kê" button ready (navigates to stats)
-- **Exports for Phase 5**: All screens ready for ad placement optimization
+- **Assumes from Phase 1**: NavigationContainer, SafeAreaProvider, all 5 game tabs
+- **Assumes from Phase 2**: All screens implemented (Home, GameDetail, GameStats), AdBanner present
+  in screens, PremiumPaywall imported in GameStatsScreen, statistics working for all games
+- **Exports**: Final production APK/AAB artifact; app live on Play Store
+- **Interface contract**: No new interfaces introduced in Phase 3 — only wiring existing ones
 
 ## Acceptance Criteria
-- [ ] HomeScreen shows 5 GameResultCards with latest results
-- [ ] Tapping a card navigates to correct GameDetailScreen
-- [ ] GameDetailScreen shows draw history for selected game
-- [ ] Pull-to-refresh works on both Home and Detail screens
-- [ ] Max 3D screen shows prize tier layout
-- [ ] LatestResult supports 5, 6, and variable number counts
-- [ ] First launch triggers fetch-all with progress indicator
-- [ ] Navigation between tabs is smooth (< 300ms)
-- [ ] `npx tsc --noEmit` passes
+- [ ] AdBanner renders on HomeScreen, GameDetailScreen, GameStatsScreen without crash
+- [ ] Interstitial fires on first GameStatsScreen visit (non-premium user)
+- [ ] Interstitial fires every 3 pull-to-refreshes on GameDetailScreen (non-premium)
+- [ ] PremiumPaywall blocks all 5 game stats screens for non-premium users
+- [ ] After purchase, stats unlock immediately without restart
+- [ ] Offline refresh shows Alert with retry button
+- [ ] Retry after reconnect succeeds
+- [ ] Tab bar icons render correctly on dark background
+- [ ] `npx tsc --noEmit` passes with zero errors
+- [ ] EAS build completes and produces valid AAB
+- [ ] No crash on cold launch in production build
 
 ## Files Touched
-- `src/screens/HomeScreen.tsx` — major rewrite
-- `src/screens/GameDetailScreen.tsx` — new
-- `src/screens/GameScreen.tsx` — delete
-- `src/components/GameResultCard.tsx` — new
-- `src/components/Max3DResult.tsx` — new
-- `src/components/LatestResult.tsx` — modify
-- `src/navigation/AppNavigator.tsx` — modify
+- `src/screens/GameDetailScreen.tsx` — modify (AdBanner + interstitial + error handling)
+- `src/screens/GameStatsScreen.tsx` — modify (AdBanner + interstitial + premium verify)
+- `src/screens/HomeScreen.tsx` — modify (error handling polish)
+- `src/navigation/AppNavigator.tsx` — modify (tab icons)
+- `app.json` — modify (version bump)
+- `eas.json` — verify (no change expected)
