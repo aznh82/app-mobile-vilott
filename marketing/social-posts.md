@@ -19,7 +19,8 @@ Mỗi trò chơi có:
 ✅ Gợi ý bộ số AI
 
 Tải miễn phí trên Google Play!
-[link]
+👇 Link tải bên dưới
+[Play Store link]
 
 #Vietlott #XoSo #KetQuaXoSo #Mega645 #Power655 #Lotto535 #Max3D
 

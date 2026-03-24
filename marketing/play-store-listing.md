@@ -4,7 +4,7 @@
 Vietlott - Kết quả & Thống kê
 
 ## Short Description (80 chars max)
-Xem kết quả 5 trò chơi Vietlott, phân tích thống kê, gợi ý bộ số thông minh.
+Xem kết quả 5 trò chơi Vietlott, phân tích thống kê, gợi ý bộ số. Miễn phí!
 
 ## Full Description (4000 chars max)
 
@@ -45,10 +45,10 @@ Tải miễn phí ngay — xem kết quả, phân tích thống kê, chọn số
 Lưu ý: Ứng dụng chỉ cung cấp công cụ phân tích thống kê. Kết quả xổ số hoàn toàn ngẫu nhiên.
 
 ## Category
-Entertainment
+Tools
 
 ## Tags
-vietlott, xổ số, kết quả xổ số, mega 6/45, power 6/55, lotto, max 3d, thống kê, lottery, vietnam
+vietlott, xổ số, kết quả xổ số, mega 6/45, power 6/55, lotto 5/35, max 3d, thống kê, lottery, vietnam, sổ xố, kqxs, vietlott 6/45, xổ số vietlott, kết quả mega
 
 ## Content Rating
 Everyone
@@ -75,3 +75,12 @@ Everyone
 - Logo: app icon
 - Text: "5 trò chơi • Thống kê • Gợi ý AI"
 - Accent color: #e8722a
+- HTML template: `assets/feature-graphic.html` → mở trong browser → screenshot 1024x500
+
+## Play Store Requirements
+- **Privacy Policy**: https://aznh82.github.io/app-mobile-vietlott/
+- **Contact email**: [cần điền]
+- **Target audience**: Adults (18+) — app liên quan đến xổ số
+- **Content rating**: IARC — chọn "Simulated Gambling" trong questionnaire
+- **Ads declaration**: Yes — contains ads (AdMob)
+- **IAP declaration**: Yes — contains in-app purchases
