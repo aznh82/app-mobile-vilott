@@ -1,12 +1,12 @@
 import * as SQLite from 'expo-sqlite';
 
-let db: SQLite.SQLiteDatabase | null = null;
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
-export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (!db) {
-    db = await SQLite.openDatabaseAsync('vietlott.db');
+export function getDatabase(): Promise<SQLite.SQLiteDatabase> {
+  if (!dbPromise) {
+    dbPromise = SQLite.openDatabaseAsync('vietlott.db');
   }
-  return db;
+  return dbPromise;
 }
 
 export async function initDB(): Promise<void> {
@@ -52,8 +52,12 @@ export async function saveDraws(
         [drawNumber, drawDate, ...numbers]
       );
       inserted++;
-    } catch {
-      // IntegrityError - draw already exists
+    } catch (e: any) {
+      // Only swallow UNIQUE constraint violations (duplicate draws)
+      const msg = e?.message || '';
+      if (!msg.includes('UNIQUE') && !msg.includes('constraint')) {
+        console.warn('saveDraws unexpected error:', msg);
+      }
     }
   }
   return inserted;
@@ -146,7 +150,7 @@ export async function getLongestAbsent(
 
 export async function cleanupOldData(): Promise<number> {
   const database = await getDatabase();
-  // Giữ 400 ngày thay vì 365 để buffer cho absent data (156 kỳ)
+  // Keep 400 days (not 365) to buffer for absent analysis which needs 156 draws (~52 weeks at 3 draws/week)
   const cutoff = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split('T')[0];

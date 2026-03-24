@@ -36,8 +36,6 @@ export default function PremiumPaywall({ visible, onClose }: PremiumPaywallProps
             <FeatureRow icon="✅" text="Không quảng cáo (banner + toàn màn hình)" />
             <FeatureRow icon="🎯" text="5 bộ số + thuật toán đa chiến lược" />
             <FeatureRow icon="📊" text="Phân tích nâng cao & chiến lược gợi ý" />
-            <FeatureRow icon="🔔" text="Thông báo kỳ quay mới" />
-            <FeatureRow icon="📤" text="Xuất báo cáo PDF" />
           </View>
 
           {/* Pricing */}

@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
 import { colors } from '../theme';
 import { NumberStats } from '../utils/statistics';
@@ -75,7 +74,7 @@ export default function FrequencyChart({ data, totalDraws }: FrequencyChartProps
             else barColor = '#2a4f6a';
 
             return (
-              <View key={i} style={styles.barColumn}>
+              <View key={item.label} style={styles.barColumn}>
                 <Text style={styles.freqLabel}>{item.freq || ''}</Text>
                 <View
                   style={[

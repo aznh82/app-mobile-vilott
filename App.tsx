@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, StyleSheet, Platform } from 'react-native';
 import { PremiumProvider } from './src/context/PremiumContext';
 import HomeScreen from './src/screens/HomeScreen';
+import { colors } from './src/theme';
 
 export default function App() {
   return (
@@ -18,7 +19,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111a24',
+    backgroundColor: colors.bgPrimary,
     paddingTop: Platform.OS === 'android' ? 30 : 0,
   },
 });

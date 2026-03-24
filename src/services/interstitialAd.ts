@@ -62,7 +62,16 @@ export function cleanupInterstitial() {
     clearTimeout(retryTimer);
     retryTimer = null;
   }
-  interstitial = null;
+  // Remove all listeners BEFORE nulling reference to prevent stale CLOSED listener
+  // from firing createAndLoad() after cleanup
+  if (interstitial) {
+    try {
+      interstitial.removeAllListeners();
+    } catch {
+      // Listener removal may fail if ad object is already disposed
+    }
+    interstitial = null;
+  }
   isLoaded = false;
   retryCount = 0;
 }

@@ -129,10 +129,12 @@ export function generateSuggestions(
       }
 
       const numbers = [...hotPicks, coldPick].sort((a, b) => a - b);
-      sets.push({
-        numbers: numbers.map((n) => String(n).padStart(2, '0')),
-        cold: String(coldPick).padStart(2, '0'),
-      });
+      if (numbers.length === 6) {
+        sets.push({
+          numbers: numbers.map((n) => String(n).padStart(2, '0')),
+          cold: String(coldPick).padStart(2, '0'),
+        });
+      }
     }
     return sets;
   }
@@ -182,6 +184,7 @@ export function generateSuggestions(
       }
     }
 
+    if (allPicks.length < 6) continue; // skip incomplete sets from sparse data
     const coldNum = allPicks[allPicks.length - 1]; // last added = cold pick
     const numbers = [...allPicks].sort((a, b) => a - b);
 

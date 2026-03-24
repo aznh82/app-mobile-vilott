@@ -121,6 +121,8 @@ function parseResults(html: string): [string, string, number[]][] {
   return results;
 }
 
+const MAX_PAGES = 100;
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -135,7 +137,7 @@ export async function fetchAllFrom(
   let page = 0;
   let reachedStart = false;
 
-  while (!reachedStart) {
+  while (!reachedStart && page < MAX_PAGES) {
     let html: string;
     try {
       html = await fetchPage(key, renderInfo, page);
@@ -156,11 +158,12 @@ export async function fetchAllFrom(
     if (results.length === 0) break;
 
     for (const r of results) {
-      const drawNum = r[0];
-      if (parseInt(drawNum) >= parseInt(startDraw)) {
+      const drawNum = r[0].padStart(5, '0');
+      const startPadded = startDraw.padStart(5, '0');
+      if (drawNum >= startPadded) {
         allResults.push(r);
       }
-      if (parseInt(drawNum) <= parseInt(startDraw)) {
+      if (drawNum <= startPadded) {
         reachedStart = true;
         break;
       }
@@ -182,14 +185,30 @@ export async function fetchNew(
   const newResults: [string, string, number[]][] = [];
   let page = 0;
 
-  while (true) {
-    const html = await fetchPage(key, renderInfo, page);
+  while (page < MAX_PAGES) {
+    let html: string;
+    try {
+      html = await fetchPage(key, renderInfo, page);
+    } catch (e) {
+      if (page > 0) {
+        // Retry with fresh API key (key may have expired)
+        try {
+          const newKey = await getApiKey();
+          html = await fetchPage(newKey, renderInfo, page);
+        } catch {
+          break; // Give up on this page
+        }
+      } else {
+        throw e;
+      }
+    }
     const results = parseResults(html);
     if (results.length === 0) break;
 
     let foundExisting = false;
+    const latestPadded = latestDraw.padStart(5, '0');
     for (const r of results) {
-      if (parseInt(r[0]) > parseInt(latestDraw)) {
+      if (r[0].padStart(5, '0') > latestPadded) {
         newResults.push(r);
       } else {
         foundExisting = true;

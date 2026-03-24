@@ -9,16 +9,16 @@ const DRAW_HOUR = 18;
 
 function getNextDrawTime(): Date {
   const now = new Date();
-  const d = new Date(now);
   for (let i = 0; i < 7; i++) {
-    d.setDate(now.getDate() + i);
-    if (DRAW_DAYS.includes(d.getDay())) {
+    const candidate = new Date(now);
+    candidate.setDate(now.getDate() + i);
+    if (DRAW_DAYS.includes(candidate.getDay())) {
       if (i === 0 && now.getHours() >= DRAW_HOUR) continue;
-      d.setHours(DRAW_HOUR, 0, 0, 0);
-      return d;
+      candidate.setHours(DRAW_HOUR, 0, 0, 0);
+      return candidate;
     }
   }
-  return d;
+  return now;
 }
 
 function formatDatePart(date: Date): string {

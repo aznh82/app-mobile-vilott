@@ -37,6 +37,7 @@ import PremiumBadge from '../components/PremiumBadge';
 import PremiumPaywall from '../components/PremiumPaywall';
 import UpgradePromptBanner from '../components/UpgradePromptBanner';
 
+// Earliest draw number to fetch — Vietlott 6/45 draw #1328 (first reliable data point)
 const START_DRAW = '01328';
 
 export default function HomeScreen() {
@@ -72,6 +73,8 @@ export default function HomeScreen() {
   const [absentData, setAbsentData] = useState<NumberStats[]>([]);
   // Guard against race condition when switching periods rapidly
   const loadStatsIdRef = useRef(0);
+  // Ref to avoid stale closure in onRefresh
+  const handleFetchRef = useRef<(() => Promise<void>) | undefined>(undefined);
   // Premium paywall
   const [showPaywall, setShowPaywall] = useState(false);
 
@@ -100,6 +103,13 @@ export default function HomeScreen() {
 
     return () => { cleanupInterstitial(); };
   }, []);
+
+  // Re-generate suggestions when premium state changes (fixes stale closure)
+  useEffect(() => {
+    if (!loading) {
+      loadSuggestions();
+    }
+  }, [isPremium, maxSuggestedSets]);
 
   const refreshCounts = async () => {
     const total = await getTotalDraws();
@@ -130,7 +140,6 @@ export default function HomeScreen() {
       absent: item.absent_draws,
     }));
     setAbsentData(absentStats);
-    return await getLongestAbsent(10);
   };
 
   const loadSuggestions = async () => {
@@ -205,6 +214,9 @@ export default function HomeScreen() {
     }
   };
 
+  // Keep ref in sync so onRefresh always calls latest handleFetch
+  handleFetchRef.current = handleFetch;
+
   const handleRegenerate = () => {
     loadSuggestions();
   };
@@ -213,9 +225,9 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await handleFetch();
+    await handleFetchRef.current?.();
     setRefreshing(false);
-  }, [period, loading]);
+  }, []);
 
   return (
     <ScrollView

@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { colors } from '../theme';
 import { usePremium } from '../context/PremiumContext';
 
@@ -12,9 +12,9 @@ export default function PremiumBadge({ onPress }: PremiumBadgeProps) {
 
   if (isPremium) {
     return (
-      <TouchableOpacity style={styles.badgePremium} activeOpacity={0.8}>
-        <Text style={styles.badgePremiumText}>👑 Premium</Text>
-      </TouchableOpacity>
+      <View style={styles.badgePremium}>
+        <Text style={styles.badgePremiumText}>Premium</Text>
+      </View>
     );
   }
 

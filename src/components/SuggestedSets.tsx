@@ -41,7 +41,7 @@ export default function SuggestedSets({
       ) : (
         <>
           {visibleSets.map((set, i) => (
-            <View key={i} style={styles.setCard}>
+            <View key={set.numbers.join('-')} style={styles.setCard}>
               <View style={styles.setLabelContainer}>
                 <Text style={styles.setLabel}>Bộ {i + 1}</Text>
                 {set.strategy && (

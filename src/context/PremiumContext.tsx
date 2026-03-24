@@ -8,6 +8,8 @@ export const PRODUCTS = {
   PREMIUM_LIFETIME: 'vietlott_premium_lifetime',
 };
 
+const PREMIUM_PRODUCT_IDS = [PRODUCTS.PREMIUM_MONTHLY, PRODUCTS.PREMIUM_LIFETIME];
+
 interface PremiumContextType {
   isPremium: boolean;
   loading: boolean;
@@ -47,15 +49,15 @@ export function usePremium() {
 const PREMIUM_KEY = '@vietlott_premium';
 const APP_OPENS_KEY = '@vietlott_app_opens';
 
-// Track IAP module availability
-let iapAvailable = false;
-
 export function PremiumProvider({ children }: { children: React.ReactNode }) {
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(true);
   const [shouldShowInterstitial, setShouldShowInterstitial] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const fetchCountRef = useRef(0);
+  const iapAvailableRef = useRef(false);
+  const purchaseListenerRef = useRef<any>(null);
+  const errorListenerRef = useRef<any>(null);
 
   // Derived
   const maxSuggestedSets = isPremium ? 5 : 3;
@@ -96,29 +98,61 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     return () => { endIAPConnection(); };
   }, []);
 
+  /** Grant premium after verified purchase */
+  const grantPremium = useCallback(async () => {
+    setIsPremium(true);
+    await AsyncStorage.setItem(PREMIUM_KEY, 'true');
+  }, []);
+
   /** Returns true if user has verified premium purchase */
   const initIAP = async (): Promise<boolean> => {
     try {
       const RNIap = require('react-native-iap');
       await RNIap.initConnection();
-      iapAvailable = true;
+      iapAvailableRef.current = true;
 
+      // Setup purchase listener — grants premium only after receipt is confirmed
+      purchaseListenerRef.current = RNIap.purchaseUpdatedListener(
+        async (purchase: any) => {
+          const isPremiumProduct = PREMIUM_PRODUCT_IDS.includes(purchase.productId);
+          if (isPremiumProduct) {
+            // Acknowledge the purchase (required by Google Play)
+            try {
+              if (purchase.purchaseToken) {
+                await RNIap.finishTransaction({ purchase, isConsumable: false });
+              }
+            } catch (ackErr) {
+              console.warn('Failed to acknowledge purchase:', ackErr);
+            }
+            await grantPremium();
+            Alert.alert('Thành công!', 'Bạn đã nâng cấp lên Premium!');
+          }
+        }
+      );
+
+      // Setup error listener
+      errorListenerRef.current = RNIap.purchaseErrorListener(
+        (error: any) => {
+          if (error.code !== 'E_USER_CANCELLED') {
+            console.warn('Purchase error:', error);
+          }
+        }
+      );
+
+      // Check existing purchases (restore on startup)
       if (Platform.OS === 'android') {
         const purchases = await RNIap.getAvailablePurchases();
         const hasPremium = purchases.some(
-          (p: any) =>
-            p.productId === PRODUCTS.PREMIUM_MONTHLY ||
-            p.productId === PRODUCTS.PREMIUM_LIFETIME
+          (p: any) => PREMIUM_PRODUCT_IDS.includes(p.productId)
         );
         if (hasPremium) {
-          setIsPremium(true);
-          await AsyncStorage.setItem(PREMIUM_KEY, 'true');
+          await grantPremium();
           return true;
         }
       }
       return false;
     } catch (e) {
-      iapAvailable = false;
+      iapAvailableRef.current = false;
       console.warn('IAP init failed:', e);
       return false;
     }
@@ -126,6 +160,15 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
 
   const endIAPConnection = async () => {
     try {
+      // Remove listeners before ending connection
+      if (purchaseListenerRef.current) {
+        purchaseListenerRef.current.remove();
+        purchaseListenerRef.current = null;
+      }
+      if (errorListenerRef.current) {
+        errorListenerRef.current.remove();
+        errorListenerRef.current = null;
+      }
       const RNIap = require('react-native-iap');
       await RNIap.endConnection();
     } catch {}
@@ -151,7 +194,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const purchaseMonthly = useCallback(async () => {
-    if (!iapAvailable) {
+    if (!iapAvailableRef.current) {
       Alert.alert('Lỗi', 'Tính năng mua hàng không khả dụng trên thiết bị này.');
       return;
     }
@@ -164,10 +207,8 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
         Alert.alert('Lỗi', 'Không tìm thấy gói Premium. Vui lòng thử lại sau.');
         return;
       }
+      // Only initiate purchase flow — premium is granted by purchaseUpdatedListener
       await RNIap.requestSubscription({ sku: PRODUCTS.PREMIUM_MONTHLY });
-      setIsPremium(true);
-      await AsyncStorage.setItem(PREMIUM_KEY, 'true');
-      Alert.alert('Thành công! 🎉', 'Bạn đã nâng cấp lên Premium!');
     } catch (e: any) {
       if (e.code !== 'E_USER_CANCELLED') {
         Alert.alert('Lỗi', e.message || 'Không thể mua. Vui lòng thử lại.');
@@ -176,7 +217,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const purchaseLifetime = useCallback(async () => {
-    if (!iapAvailable) {
+    if (!iapAvailableRef.current) {
       Alert.alert('Lỗi', 'Tính năng mua hàng không khả dụng trên thiết bị này.');
       return;
     }
@@ -187,10 +228,8 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
         Alert.alert('Lỗi', 'Không tìm thấy gói Premium. Vui lòng thử lại sau.');
         return;
       }
+      // Only initiate purchase flow — premium is granted by purchaseUpdatedListener
       await RNIap.requestPurchase({ sku: PRODUCTS.PREMIUM_LIFETIME });
-      setIsPremium(true);
-      await AsyncStorage.setItem(PREMIUM_KEY, 'true');
-      Alert.alert('Thành công! 🎉', 'Bạn đã nâng cấp lên Premium vĩnh viễn!');
     } catch (e: any) {
       if (e.code !== 'E_USER_CANCELLED') {
         Alert.alert('Lỗi', e.message || 'Không thể mua. Vui lòng thử lại.');
@@ -199,7 +238,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const restorePurchases = useCallback(async () => {
-    if (!iapAvailable) {
+    if (!iapAvailableRef.current) {
       Alert.alert('Lỗi', 'Tính năng mua hàng không khả dụng trên thiết bị này.');
       return;
     }
@@ -207,13 +246,10 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
       const RNIap = require('react-native-iap');
       const purchases = await RNIap.getAvailablePurchases();
       const hasPremium = purchases.some(
-        (p: any) =>
-          p.productId === PRODUCTS.PREMIUM_MONTHLY ||
-          p.productId === PRODUCTS.PREMIUM_LIFETIME
+        (p: any) => PREMIUM_PRODUCT_IDS.includes(p.productId)
       );
       if (hasPremium) {
-        setIsPremium(true);
-        await AsyncStorage.setItem(PREMIUM_KEY, 'true');
+        await grantPremium();
         Alert.alert('Đã khôi phục', 'Gói Premium của bạn đã được khôi phục!');
       } else {
         Alert.alert('Không tìm thấy', 'Không có giao dịch Premium nào trước đó.');
@@ -221,7 +257,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     } catch (e: any) {
       Alert.alert('Lỗi', e.message || 'Không thể khôi phục. Vui lòng thử lại.');
     }
-  }, []);
+  }, [grantPremium]);
 
   return (
     <PremiumContext.Provider
