@@ -79,7 +79,7 @@ Everyone
 
 ## Play Store Requirements
 - **Privacy Policy**: https://aznh82.github.io/app-mobile-vietlott/
-- **Contact email**: [cần điền]
+- **Contact email**: aznh82@gmail.com
 - **Target audience**: Adults (18+) — app liên quan đến xổ số
 - **Content rating**: IARC — chọn "Simulated Gambling" trong questionnaire
 - **Ads declaration**: Yes — contains ads (AdMob)
