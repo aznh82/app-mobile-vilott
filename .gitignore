@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# rune local-only notes (brainstorm, roadmap, BA sessions)
+.rune/local/
+
 # typescript
 *.tsbuildinfo
 
